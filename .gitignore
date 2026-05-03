@@ -1,0 +1,17 @@
+# Python
+.venv/
+__pycache__/
+*.pyc
+
+# Build artifacts
+build/
+*.pyd
+*.so
+*.egg-info/
+
+# Media (uploaded/result images)
+media/
+
+# IDE
+.idea/
+.vscode/

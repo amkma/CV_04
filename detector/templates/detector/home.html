@@ -1,0 +1,291 @@
+{% load static %}
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>CV_04 — Image Thresholding & Unsupervised Segmentation</title>
+    <meta name="description" content="Computer Vision Assignment 4: Optimal, Otsu, spectral and local thresholding, K-means, region growing, agglomerative and mean shift segmentation — all from scratch in C++">
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800&display=swap" rel="stylesheet">
+    <link rel="stylesheet" href="{% static 'css/style.css' %}">
+</head>
+<body>
+
+<div class="app" id="app">
+
+    <!-- ═══ TOP NAV BAR ═══ -->
+    <header class="topbar">
+        <div class="topbar-left">
+            <h1 class="logo">
+                <span class="logo-icon">◈</span>
+                CV_04
+            </h1>
+            <span class="logo-sub">Thresholding & Segmentation</span>
+        </div>
+        <nav class="tab-nav" id="tab-nav">
+            <button class="tab-btn active" data-tab="thresholding" id="tab-btn-thresholding">
+                <span class="tab-icon">◧</span>
+                Thresholding
+            </button>
+            <button class="tab-btn" data-tab="segmentation" id="tab-btn-segmentation">
+                <span class="tab-icon">◉</span>
+                Segmentation
+            </button>
+        </nav>
+    </header>
+
+    <!-- ═══ MAIN CONTENT ═══ -->
+    <div class="main-container">
+
+        <!-- ──── TAB 1: THRESHOLDING ──── -->
+        <section class="tab-panel active" id="panel-thresholding">
+            <div class="panel-layout">
+                <!-- Controls -->
+                <aside class="controls-panel">
+                    <div class="control-card">
+                        <h3 class="card-title">
+                            <span class="card-icon">📁</span>
+                            Upload Image
+                        </h3>
+                        <label class="upload-zone" id="upload-zone-thresh">
+                            <input type="file" id="input-thresh" accept="image/*" hidden>
+                            <div class="upload-content">
+                                <span class="upload-icon">⬆</span>
+                                <span class="upload-text" id="upload-text-thresh">Drop image or click</span>
+                            </div>
+                        </label>
+                        <img id="thumb-thresh" class="thumb" src="" alt="" hidden>
+                    </div>
+
+                    <div class="control-card">
+                        <h3 class="card-title">
+                            <span class="card-icon">🔧</span>
+                            Method
+                        </h3>
+                        <div class="method-group" id="thresh-methods">
+                            <button class="method-btn active" data-method="optimal">Optimal</button>
+                            <button class="method-btn" data-method="otsu">Otsu</button>
+                            <button class="method-btn" data-method="spectral">Spectral</button>
+                            <button class="method-btn" data-method="local">Local</button>
+                        </div>
+                    </div>
+
+                    <!-- Spectral params -->
+                    <div class="control-card param-panel" id="params-spectral">
+                        <h3 class="card-title">
+                            <span class="card-icon">⚙</span>
+                            Spectral Parameters
+                        </h3>
+                        <div class="ctrl" data-key="num_classes">
+                            <label>Number of Classes <span class="val">3</span></label>
+                            <input type="range" min="2" max="8" step="1" value="3">
+                        </div>
+                    </div>
+
+                    <!-- Local params -->
+                    <div class="control-card param-panel" id="params-local">
+                        <h3 class="card-title">
+                            <span class="card-icon">⚙</span>
+                            Local Parameters
+                        </h3>
+                        <div class="ctrl" data-key="block_size">
+                            <label>Block Size <span class="val">32</span></label>
+                            <input type="range" min="8" max="128" step="4" value="32">
+                        </div>
+                    </div>
+
+                    <button id="btn-thresh" class="run-btn" disabled>
+                        <span class="btn-icon">▶</span>
+                        Run Thresholding
+                    </button>
+
+                    <button id="btn-save-thresh" class="save-btn" disabled>
+                        <span class="btn-icon">💾</span>
+                        Save Result
+                    </button>
+                </aside>
+
+                <!-- Results -->
+                <main class="results-area">
+                    <div id="results-thresh-empty" class="empty-state">
+                        <span class="empty-state-icon">◧</span>
+                        <span class="empty-state-text">Upload an image and run thresholding</span>
+                        <span class="empty-state-hint">Choose from Optimal, Otsu, Spectral or Local methods</span>
+                    </div>
+                    <div id="results-thresh" class="results-grid" hidden>
+                        <div class="result-card">
+                            <div class="result-header">
+                                <h3>Original</h3>
+                            </div>
+                            <img id="img-thresh-original" src="" alt="Original">
+                        </div>
+                        <div class="result-card">
+                            <div class="result-header">
+                                <h3 id="thresh-method-title">Thresholded</h3>
+                                <div class="badges">
+                                    <span class="badge" id="thresh-info">—</span>
+                                    <span class="badge time-badge" id="thresh-time">0 ms</span>
+                                </div>
+                            </div>
+                            <img id="img-thresh-result" src="" alt="Result">
+                        </div>
+                        <!-- Histogram -->
+                        <div class="histogram-container">
+                            <div class="histogram-card">
+                                <h3>Histogram <span class="badge" id="thresh-line-info" style="margin-left:8px;font-size:0.68rem">—</span></h3>
+                                <canvas id="canvas-histogram" class="histogram-canvas"></canvas>
+                            </div>
+                        </div>
+                    </div>
+                </main>
+            </div>
+        </section>
+
+        <!-- ──── TAB 2: SEGMENTATION ──── -->
+        <section class="tab-panel" id="panel-segmentation">
+            <div class="panel-layout">
+                <aside class="controls-panel">
+                    <div class="control-card">
+                        <h3 class="card-title">
+                            <span class="card-icon">📁</span>
+                            Upload Image
+                        </h3>
+                        <label class="upload-zone" id="upload-zone-seg">
+                            <input type="file" id="input-seg" accept="image/*" hidden>
+                            <div class="upload-content">
+                                <span class="upload-icon">⬆</span>
+                                <span class="upload-text" id="upload-text-seg">Drop image or click</span>
+                            </div>
+                        </label>
+                        <img id="thumb-seg" class="thumb" src="" alt="" hidden>
+                    </div>
+
+                    <div class="control-card">
+                        <h3 class="card-title">
+                            <span class="card-icon">🔧</span>
+                            Method
+                        </h3>
+                        <div class="method-group" id="seg-methods">
+                            <button class="method-btn active" data-method="kmeans">K-Means</button>
+                            <button class="method-btn" data-method="region_growing">Region Growing</button>
+                            <button class="method-btn" data-method="agglomerative">Agglomerative</button>
+                            <button class="method-btn" data-method="mean_shift">Mean Shift</button>
+                        </div>
+                    </div>
+
+                    <!-- K-Means params -->
+                    <div class="control-card param-panel active" id="params-kmeans">
+                        <h3 class="card-title">
+                            <span class="card-icon">⚙</span>
+                            K-Means Parameters
+                        </h3>
+                        <div class="ctrl" data-key="k">
+                            <label>Clusters (k) <span class="val">4</span></label>
+                            <input type="range" min="2" max="16" step="1" value="4">
+                        </div>
+                        <div class="ctrl" data-key="max_iter">
+                            <label>Max Iterations <span class="val">50</span></label>
+                            <input type="range" min="5" max="100" step="5" value="50">
+                        </div>
+                    </div>
+
+                    <!-- Region Growing params -->
+                    <div class="control-card param-panel" id="params-region_growing">
+                        <h3 class="card-title">
+                            <span class="card-icon">⚙</span>
+                            Region Growing Parameters
+                        </h3>
+                        <div class="ctrl" data-key="rg_threshold">
+                            <label>Similarity Threshold <span class="val">15</span></label>
+                            <input type="range" min="3" max="80" step="1" value="15">
+                        </div>
+                        <p class="seed-hint" id="seed-hint">Click on the image to place seed points. Right-click to remove last.</p>
+                    </div>
+
+                    <!-- Agglomerative params -->
+                    <div class="control-card param-panel" id="params-agglomerative">
+                        <h3 class="card-title">
+                            <span class="card-icon">⚙</span>
+                            Agglomerative Parameters
+                        </h3>
+                        <div class="ctrl" data-key="agg_clusters">
+                            <label>Num Clusters <span class="val">4</span></label>
+                            <input type="range" min="2" max="16" step="1" value="4">
+                        </div>
+                    </div>
+
+                    <!-- Mean Shift params -->
+                    <div class="control-card param-panel" id="params-mean_shift">
+                        <h3 class="card-title">
+                            <span class="card-icon">⚙</span>
+                            Mean Shift Parameters
+                        </h3>
+                        <div class="ctrl" data-key="spatial_radius">
+                            <label>Spatial Radius <span class="val">20</span></label>
+                            <input type="range" min="5" max="80" step="1" value="20">
+                        </div>
+                        <div class="ctrl" data-key="color_radius">
+                            <label>Color Radius <span class="val">30</span></label>
+                            <input type="range" min="5" max="100" step="1" value="30">
+                        </div>
+                    </div>
+
+                    <button id="btn-seg" class="run-btn" disabled>
+                        <span class="btn-icon">▶</span>
+                        Run Segmentation
+                    </button>
+
+                    <button id="btn-save-seg" class="save-btn" disabled>
+                        <span class="btn-icon">💾</span>
+                        Save Result
+                    </button>
+                </aside>
+
+                <main class="results-area">
+                    <div id="results-seg-empty" class="empty-state">
+                        <span class="empty-state-icon">◉</span>
+                        <span class="empty-state-text">Upload an image and run segmentation</span>
+                        <span class="empty-state-hint">Choose from K-Means, Region Growing, Agglomerative or Mean Shift</span>
+                    </div>
+                    <div id="results-seg" class="results-grid" hidden>
+                        <div class="result-card">
+                            <div class="result-header">
+                                <h3>Original</h3>
+                            </div>
+                            <div class="seed-image-container" id="seed-image-container">
+                                <img id="img-seg-original" src="" alt="Original">
+                            </div>
+                        </div>
+                        <div class="result-card">
+                            <div class="result-header">
+                                <h3 id="seg-method-title">Segmented</h3>
+                                <div class="badges">
+                                    <span class="badge green-badge" id="seg-clusters">—</span>
+                                    <span class="badge" id="seg-iters" hidden>—</span>
+                                    <span class="badge time-badge" id="seg-time">0 ms</span>
+                                </div>
+                            </div>
+                            <img id="img-seg-result" src="" alt="Result">
+                        </div>
+                    </div>
+                </main>
+            </div>
+        </section>
+
+    </div>
+
+    <!-- Loading overlay -->
+    <div id="loader" class="loader-overlay" hidden>
+        <div class="loader-card">
+            <div class="spinner"></div>
+            <span class="loader-text">Processing…</span>
+        </div>
+    </div>
+
+</div>
+
+<script src="{% static 'js/app.js' %}"></script>
+</body>
+</html>
