@@ -150,25 +150,12 @@ inline SegmentResult kmeans_segment(const cv::Mat& img, int k, int max_iter) {
     }
 
     // Build output: map each pixel to its centroid color
-    cv::Mat output;
-    if (ch == 1) {
-        output = cv::Mat(rows, cols, CV_8UC3);
-        for (int y = 0; y < rows; ++y)
-            for (int x = 0; x < cols; ++x) {
-                int lbl = labels[y * cols + x];
-                output.at<cv::Vec3b>(y, x) = label_color(lbl);
-            }
-    } else {
-        output = cv::Mat(rows, cols, CV_8UC3);
-        for (int y = 0; y < rows; ++y)
-            for (int x = 0; x < cols; ++x) {
-                int lbl = labels[y * cols + x];
-                auto& cen = centroids[lbl];
-                output.at<cv::Vec3b>(y, x) = cv::Vec3b(
-                    (uchar)std::clamp(cen[0], 0.0, 255.0),
-                    (uchar)std::clamp(cen[1], 0.0, 255.0),
-                    (uchar)std::clamp(cen[2], 0.0, 255.0));
-            }
+    cv::Mat output(rows, cols, CV_8UC3);
+    for (int y = 0; y < rows; ++y) {
+        for (int x = 0; x < cols; ++x) {
+            int lbl = labels[y * cols + x];
+            output.at<cv::Vec3b>(y, x) = label_color(lbl);
+        }
     }
 
     return {output, k, iters, 0};
@@ -289,7 +276,7 @@ inline SegmentResult agglomerative_segment(const cv::Mat& img, int num_clusters)
 
     // Adaptive block size: keep total blocks ≤ ~500 for tractability
     // O(n³) merge loop: 500³ = 125M which is fine, 4000³ = 64B which is not
-    int bsize = 8;
+    int bsize = 50;
     while ((rows / bsize) * (cols / bsize) > 500 && bsize < 64)
         bsize *= 2;
 
@@ -378,25 +365,42 @@ inline SegmentResult agglomerative_segment(const cv::Mat& img, int num_clusters)
         iters++;
     }
 
-    // Map blocks back to pixels
-    std::vector<int> block_label(nb, 0);
-    int lbl = 0;
+    // Extract the final cluster colors
+    std::vector<std::vector<double>> final_colors;
     for (int i = 0; i < nb; ++i) {
-        if (!active[i]) continue;
-        for (int bi : clusters[i].blocks)
-            block_label[bi] = lbl;
-        lbl++;
+        if (active[i]) {
+            final_colors.push_back(clusters[i].color);
+        }
     }
 
+    // Map each pixel to the nearest final cluster color to avoid blockiness
     cv::Mat output(rows, cols, CV_8UC3);
-    for (int by = 0; by < brows; ++by)
-        for (int bx = 0; bx < bcols; ++bx) {
-            int bi = by * bcols + bx;
-            cv::Vec3b col_v = label_color(block_label[bi]);
-            for (int y = by*bsize; y < std::min((by+1)*bsize, rows); ++y)
-                for (int x = bx*bsize; x < std::min((bx+1)*bsize, cols); ++x)
-                    output.at<cv::Vec3b>(y, x) = col_v;
+    for (int y = 0; y < rows; ++y) {
+        for (int x = 0; x < cols; ++x) {
+            std::vector<double> p(ch);
+            if (ch == 1) {
+                p[0] = img.at<uchar>(y, x);
+            } else {
+                auto c = img.at<cv::Vec3b>(y, x);
+                p[0] = c[0]; p[1] = c[1]; p[2] = c[2];
+            }
+
+            double min_dist = 1e30;
+            int best_lbl = 0;
+            for (int i = 0; i < (int)final_colors.size(); ++i) {
+                double d = 0;
+                for (int c = 0; c < ch; ++c) {
+                    double diff = p[c] - final_colors[i][c];
+                    d += diff * diff;
+                }
+                if (d < min_dist) {
+                    min_dist = d;
+                    best_lbl = i;
+                }
+            }
+            output.at<cv::Vec3b>(y, x) = label_color(best_lbl);
         }
+    }
 
     return {output, num_clusters, iters, 0};
 }
@@ -574,16 +578,7 @@ inline SegmentResult mean_shift_segment(const cv::Mat& img,
             int sx = std::min(x / step, scols - 1);
             int lbl = labels[sy * scols + sx];
             if (lbl >= 0 && lbl < (int)final_modes.size()) {
-                auto& m = final_modes[lbl];
-                if (ch == 1) {
-                    uchar v = (uchar)std::clamp(m[2], 0.0, 255.0);
-                    output.at<cv::Vec3b>(y, x) = cv::Vec3b(v, v, v);
-                } else {
-                    output.at<cv::Vec3b>(y, x) = cv::Vec3b(
-                        (uchar)std::clamp(m[2], 0.0, 255.0),
-                        (uchar)std::clamp(m[3], 0.0, 255.0),
-                        (uchar)std::clamp(m[4], 0.0, 255.0));
-                }
+                output.at<cv::Vec3b>(y, x) = label_color(lbl);
             } else {
                 output.at<cv::Vec3b>(y, x) = label_color(0);
             }
